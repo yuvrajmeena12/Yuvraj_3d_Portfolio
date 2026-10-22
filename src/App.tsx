@@ -1,40 +1,49 @@
-import { Scene3D } from './components/Scene3D'
+import { lazy, Suspense } from 'react'
+import { Navbar } from './components/Navbar'
+import { HeroSection } from './components/HeroSection'
+import { ProjectsSection } from './components/ProjectsSection'
+import { AboutSection } from './components/AboutSection'
+import { SkillsSection } from './components/SkillsSection'
+import { ContactSection } from './components/ContactSection'
+import { Footer } from './components/Footer'
+import { CustomCursor } from './components/CustomCursor'
+
+// Lazy-load the heavy 3D WebGL scene to preserve instant First Contentful Paint
+const Scene3D = lazy(() =>
+  import('./components/Scene3D').then((module) => ({ default: module.Scene3D }))
+)
 
 export function App() {
   return (
-    <main className="app-viewport">
-      {/* 3D Scene Proof of Concept */}
-      <Scene3D />
+    <div className="portfolio-app">
+      {/* Accessible skip-link for keyboard users */}
+      <a href="#main-content" className="skip-to-content">
+        Skip to main content
+      </a>
 
-      {/* Restrained Technical HUD Overlay */}
-      <aside className="hud-overlay" aria-label="Technical Prototype HUD">
-        <header className="hud-header">
-          <div className="brand-meta">
-            <span className="brand-name">Yuvraj</span>
-            <span className="brand-subtitle">Real-Time 3D Portfolio • Milestone 1</span>
-          </div>
+      {/* Subtle Hardware-Accelerated Desktop Pointer Follower */}
+      <CustomCursor />
 
-          <div className="status-badge" role="status">
-            <span className="status-indicator" aria-hidden="true" />
-            <span>WebGL 3D Active</span>
-          </div>
-        </header>
+      {/* Persistent 3D Visual Anchor (Loaded asynchronously with zero layout shift) */}
+      <Suspense fallback={<div className="canvas-placeholder" aria-hidden="true" />}>
+        <Scene3D />
+      </Suspense>
 
-        <footer className="hud-footer">
-          <div className="hud-details">
-            <h1>Sculptural Study</h1>
-            <p>
-              Hardware-accelerated physical metallic mesh with studio rim lighting and continuous parallax damping.
-            </p>
-          </div>
+      {/* Semantic Top Navigation */}
+      <Navbar />
 
-          <div className="hud-spec">
-            <span>Interact • Move pointer to tilt</span>
-            <span>R3F v9 • Three.js v0.186 • Vite</span>
-          </div>
-        </footer>
-      </aside>
-    </main>
+      {/* Main Scrollable Content */}
+      <main id="main-content" className="content-scroll-flow">
+        <HeroSection />
+        <ProjectsSection />
+        <AboutSection />
+        <SkillsSection />
+        <ContactSection />
+      </main>
+
+      {/* Semantic Footer */}
+      <Footer />
+    </div>
   )
 }
 

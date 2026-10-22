@@ -1,6 +1,6 @@
-import { Component, Suspense, useEffect, useState, type ReactNode } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { ContactShadows } from '@react-three/drei'
+import { Component, Suspense, useState, useEffect, useMemo, type ReactNode } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
 import { SculpturalObject } from './SculpturalObject'
 import { WebGLFallback } from './WebGLFallback'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
@@ -48,13 +48,78 @@ function checkWebGLSupport(): boolean {
   }
 }
 
-export const Scene3D = () => {
-  const [isSupported, setIsSupported] = useState<boolean>(true)
-  const prefersReducedMotion = usePrefersReducedMotion()
+/**
+ * High-Contrast Studio Lightbank Environment.
+ * Generates an offline HDR PMREM cubemap composed of pure white studio softbox strips
+ * floating against a pitch-black (#000000) void.
+ * Guarantees razor-sharp silver-white highlight reflections separated by deep obsidian shadow valleys.
+ */
+function StudioLightbankEnvironment() {
+  const gl = useThree((state) => state.gl)
+
+  const envTexture = useMemo(() => {
+    const studioScene = new THREE.Scene()
+    studioScene.background = new THREE.Color(0x000000)
+
+    const keyMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff })
+    const rimMaterial = new THREE.MeshBasicMaterial({ color: 0xf0f4f8 })
+
+    // 1. Overhead Main Softbox: Creates broad silver crescent highlights on upper crests
+    const geomOverhead = new THREE.PlaneGeometry(8, 4)
+    const meshOverhead = new THREE.Mesh(geomOverhead, keyMaterial)
+    meshOverhead.position.set(0, 6, 2)
+    meshOverhead.rotation.x = Math.PI / 2 + 0.3
+    studioScene.add(meshOverhead)
+
+    // 2. Key Vertical Strip Softbox: Produces brilliant vertical highlight ribbons
+    const geomKeyStrip = new THREE.PlaneGeometry(1.6, 10)
+    const meshKeyStrip = new THREE.Mesh(geomKeyStrip, keyMaterial)
+    meshKeyStrip.position.set(5.5, 1, 4.5)
+    meshKeyStrip.rotation.y = -Math.PI / 4
+    studioScene.add(meshKeyStrip)
+
+    // 3. Rim Vertical Strip Softbox: Defines crisp silver contour silhouette on rear-left
+    const geomRimStrip = new THREE.PlaneGeometry(1.2, 9)
+    const meshRimStrip = new THREE.Mesh(geomRimStrip, rimMaterial)
+    meshRimStrip.position.set(-5.5, 2, -3.5)
+    meshRimStrip.rotation.y = Math.PI * 0.6
+    studioScene.add(meshRimStrip)
+
+    // 4. Low Horizon Accent Strip: Provides subtle lower edge reflection
+    const geomLowStrip = new THREE.PlaneGeometry(7, 1)
+    const meshLowStrip = new THREE.Mesh(geomLowStrip, rimMaterial)
+    meshLowStrip.position.set(0, -4.5, 3)
+    meshLowStrip.rotation.x = -Math.PI / 3
+    studioScene.add(meshLowStrip)
+
+    const pmremGenerator = new THREE.PMREMGenerator(gl)
+    pmremGenerator.compileEquirectangularShader()
+    const texture = pmremGenerator.fromScene(studioScene, 0.02).texture
+
+    // Clean up temporary procedural scene geometry and generator
+    geomOverhead.dispose()
+    geomKeyStrip.dispose()
+    geomRimStrip.dispose()
+    geomLowStrip.dispose()
+    keyMaterial.dispose()
+    rimMaterial.dispose()
+    pmremGenerator.dispose()
+
+    return texture
+  }, [gl])
 
   useEffect(() => {
-    setIsSupported(checkWebGLSupport())
-  }, [])
+    return () => {
+      envTexture.dispose()
+    }
+  }, [envTexture])
+
+  return <primitive object={envTexture} attach="environment" />
+}
+
+export const Scene3D = () => {
+  const [isSupported] = useState<boolean>(() => checkWebGLSupport())
+  const prefersReducedMotion = usePrefersReducedMotion()
 
   if (!isSupported) {
     return <WebGLFallback reason="WebGL context could not be created on this device/browser." />
@@ -82,16 +147,16 @@ export const Scene3D = () => {
               powerPreference: 'high-performance',
             }}
           >
-            {/* Cinematic studio dark background */}
-            <color attach="background" args={['#08090d']} />
+            {/* The Black Void: Pure #020204 background */}
+            <color attach="background" args={['#020204']} />
 
-            {/* Soft Ambient Fill */}
-            <ambientLight intensity={0.4} color="#8a9ab0" />
+            {/* High-contrast studio lightbank reflection environment */}
+            <StudioLightbankEnvironment />
 
-            {/* Main Key Light casting realistic directional shadows */}
+            {/* Controlled Key Directional Light for crisp specular glints */}
             <directionalLight
-              position={[5, 7, 5]}
-              intensity={2.4}
+              position={[5, 8, 4]}
+              intensity={2.2}
               color="#ffffff"
               castShadow
               shadow-mapSize-width={1024}
@@ -101,31 +166,18 @@ export const Scene3D = () => {
               shadow-bias={-0.0001}
             />
 
-            {/* Cool Rim/Back Light defining metallic contour edges */}
+            {/* Crisp Rim Light defining the metallic silhouette edge */}
             <directionalLight
-              position={[-5, 4, -4]}
-              intensity={3.2}
-              color="#4da6ff"
+              position={[-6, 3, -4]}
+              intensity={2.8}
+              color="#e2e8f0"
             />
 
-            {/* Subtle warm under-fill light for contrast */}
-            <pointLight
-              position={[0, -4, 2]}
-              intensity={1.2}
-              color="#f0ebe1"
-            />
+            {/* Minimal Ambient Baseline to preserve pure black shadow cavities */}
+            <ambientLight intensity={0.05} color="#ffffff" />
 
-            {/* Abstract Metallic Centerpiece */}
+            {/* The Single Dominant Liquid Chrome Sculpture */}
             <SculpturalObject reducedMotion={prefersReducedMotion} />
-
-            {/* Studio Floor Contact Shadows */}
-            <ContactShadows
-              position={[0, -2.1, 0]}
-              opacity={0.65}
-              scale={10}
-              blur={2.4}
-              far={4.5}
-            />
           </Canvas>
         </Suspense>
       </div>
